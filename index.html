@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+
+<html>
+ <head>
+  <title>Ball</title>
+  <style>
+table {
+	border: 1px solid black;
+	border-collapse: collapse; 
+	margin: 10px 0px; }
+td, th {
+	border: 1px solid black;
+	padding: 10px; }
+button {
+	padding: 10px; }
+input {
+	border: none;
+	width: 100%; }
+  </style>
+  <script>
+var canvas, ctx, cw, ch;
+
+var x0, dt, x, prevX, xMax, zoom;
+var initd = new Array();
+var d = new Array();
+var prev = new Array();
+var positions = new Array();
+var derivatives = new Array();
+var speed = 24;
+var direction = speed;
+var t = 0;
+var radius = 10;
+var backgroundImage;
+var interval;
+var energy;
+const gridSpacing = 1;
+var center = 0;
+var f, f_;
+
+var g = 9.81;
+var m = 1;
+
+function animateBall() {
+	var a = positions[t];
+	var fa = f(a);
+	var f_a = f_(a);
+	
+	var x = (a * zoom - (f_a*radius) / Math.sqrt(f_a * f_a + 1));
+	var y = (fa * zoom + radius / Math.sqrt(f_a * f_a + 1));	
+	ctx.fillStyle = "#773333";
+	ctx.putImageData(backgroundImage, 0, 0);
+	ctx.beginPath();
+	ctx.arc(x, y, radius, 0, Math.PI*2, false);
+	ctx.fill();
+	if (t >= positions.length-speed && direction == speed) {
+		direction = -speed;
+	}
+	else if (t == 0 && direction == -speed) {
+		direction = speed;
+	}
+	t += direction;
+}
+
+function paint() {
+	ctx.beginPath();
+	
+	ctx.setLineDash([]);
+	ctx.strokeStyle = "gray";
+	
+	var prevHeight = f(prev[0]);
+	var currentHeight = f(d[0]);
+	
+	ctx.moveTo(prev[0]*zoom, prevHeight*zoom);
+	ctx.lineTo(d[0]*zoom, currentHeight*zoom);
+	ctx.lineTo(prev[0]*zoom, prevHeight*zoom);
+	
+	ctx.stroke();
+}
+
+function paintGrid() {
+	ctx.beginPath();
+	
+	ctx.setLineDash([5, 2]);
+	ctx.lineWidth = 1;
+	ctx.strokeStyle = "gray";
+	
+	for (var i = 0; i < cw/2*zoom; i+=gridSpacing*zoom) {
+		ctx.moveTo(-i, ch/2);
+		ctx.lineTo(-i, -ch/2);
+	}
+	for (var i = 0; i < cw/2*zoom; i+=gridSpacing*zoom) {
+		ctx.moveTo(i, ch/2);
+		ctx.lineTo(i, -ch/2);
+	}
+	for (var i = 0; i < ch/2*zoom; i+=gridSpacing*zoom) {
+		ctx.moveTo(-cw/2, -i);
+		ctx.lineTo(cw/2, -i);
+	}
+	for (var i = 0; i < ch/2*zoom; i+=gridSpacing*zoom) {
+		ctx.moveTo(-cw/2, i);
+		ctx.lineTo(cw/2, i);
+	}
+	
+	ctx.stroke();
+	ctx.beginPath();
+	
+	ctx.lineWidth = 2;
+	ctx.strokeStyle = "black";
+	
+	ctx.moveTo(-cw/2, 0);
+	ctx.lineTo(cw/2, 0);
+	ctx.moveTo(0, -ch/2);
+	ctx.lineTo(0, ch/2);
+	
+	ctx.stroke();
+}
+
+/*function f(x) {
+	return 0.6*x*x*x*x*x*x+x*x*x*x*x-0.01*x*x*x*x-x*x*x-0.2*x*x+0.2*x;
+	//return Math.sin(x)+1.1;
+	//return x*x;
+}
+
+function f_(x) {
+	return 0.6*6*x*x*x*x*x+5*x*x*x*x-0.04*x*x*x-3*x*x-0.2*2*x+0.2;
+	//return Math.cos(x);
+	//return 2*x;
+}*/
+
+function update() {
+	ctx.clearRect(-cw/2, -ch/2, cw, ch);
+	paintGrid();
+	x = x0;
+	d = initd.slice(0);
+	var c = 0.5 * m * d[1] * d[1] * (1 + f_(d[0])) + m * g * f(d[0]);
+	
+	var i = 0;
+	var posRight = new Array();
+	var derRight = new Array();
+	while (x < cw/2) {
+		prevX = x;
+		prev = d.slice(0);
+		
+		if ((2 * (c-m*g*f(d[0]))/(m * (1 + f_(d[0]) * f_(d[0])))) > 0) {
+			d[1] = Math.sqrt((2 * (c-m*g*f(d[0]))/(m * (1 + f_(d[0]) * f_(d[0])))));
+			d[0] = dt*d[1] + d[0];
+			
+			posRight[i] = d[0];
+			derRight[i] = d[1];
+			i++;
+			
+			paint();
+		}
+		x += dt;
+	}
+	
+	x = x0;
+	d = initd.slice(0);
+	
+	i = 0;
+	var posLeft = new Array();
+	var derLeft = new Array();
+	while (x > -cw/2) {
+		prevX = x;
+		prev = d.slice(0);
+		
+		if ((2 * (c-m*g*f(d[0]))/(m * (1 + f_(d[0]) * f_(d[0])))) > 0) {
+			d[1] = Math.sqrt((2 * (c-m*g*f(d[0]))/(m * (1 + f_(d[0]) * f_(d[0])))));
+			d[0] = -dt*d[1] + d[0];
+			
+			posLeft[i] = d[0];
+			derLeft[i] = d[1];
+			i++;
+			
+			paint();
+		}
+		x -= dt;
+	}
+	
+	center = posLeft.length;
+	t = 0;
+	posLeft.reverse();
+	derLeft.reverse();
+	
+	positions = posLeft.concat(posRight);
+	derivatives = derLeft.concat(derRight);
+	
+	backgroundImage = ctx.getImageData(0, 0, cw, ch);
+	
+	clearInterval(interval);
+	interval = setInterval(function(){animateBall()}, 1000/speed);
+}
+
+function setParams() {
+	x0 = 0;
+	dt = parseFloat(document.getElementById("dt").value);
+	zoom = parseFloat(document.getElementById("zoom").value);
+	f = new Function("x", "return " + document.getElementById("f").value);
+	f_ = new Function("x", "return " + document.getElementById("f_").value);
+	
+	radius = 10/500*zoom;
+	
+	initd = new Array();
+	
+	initd[0] = 0;
+	initd[1] = 2;
+	update();
+}
+
+function init() {
+	canvas = document.getElementById("cvs");
+	ctx = canvas.getContext("2d");
+	cw = canvas.width;
+	ch = canvas.height;
+	
+	ctx.translate(cw/2, ch/2);
+	ctx.scale(1, -1);
+	
+	ctx.lineJoin = "round";
+	ctx.lineWidth = 2;
+	setParams();
+}
+document.addEventListener("DOMContentLoaded", init, false);
+
+  </script>
+ </head>
+ <body>
+  <canvas id="cvs" width="750px" height="750px"></canvas>
+  <table>
+   <thead>
+    <tr>
+     <th>Parameter</th>
+     <th>Input</th>
+     <th>Description</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td>zoom</td>
+     <td>
+      <input type="number" id="zoom" min="1" max="1000" step="0.01" value="200" />
+     </td>
+     <td>Zoom level of the simulation</td>
+    </tr>
+    <tr>
+     <td>f(x)</td>
+     <td>
+      <input id="f" value="0.6*x**6+x**5-0.01*x**4-x**3-0.2*x**2+0.2*x+Math.sin(x)/3" type="text" size="80" />
+     </td>
+     <td>Height of track at each point as a function of x (JS notation)</td>
+    </tr>
+    <tr>
+     <td>f&prime;(x)</td>
+     <td>
+      <input id="f_" value="3.6*x**5+5*x**4-0.04*x**3-3*x**2-0.4*x+0.2+Math.cos(x)/3" type="text" size="80" />
+     </td>
+     <td>Gradient of track at each point as a function of x (JS notation)</td>
+    </tr>
+    <tr>
+     <td>dt</td>
+     <td>
+      <input id="dt" value="0.001" min="0.00001" max="1" step="0.00001" type="number" />
+     </td>
+     <td>Time step size</td>
+    </tr>
+   </tbody>
+  </table>
+  <button onclick="setParams()">Run</button>
+ </body>
+</html>
